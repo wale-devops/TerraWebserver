@@ -186,6 +186,7 @@ resource "aws_instance" "docker_ec2" {
               sudo yum install git docker -y
               sudo systemctl enable docker
               sudo systemctl start docker
+	      sudo yum install git -y
               EOF
 
   tags = {
