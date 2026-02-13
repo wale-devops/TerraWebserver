@@ -1,29 +1,16 @@
-variable "region" {
-  description = "AWS region"
-  type        = string
-  default     = "us-east-1"
-}
-
 variable "vpc_cidr" {
   description = "VPC CIDR block"
   type        = string
-  default     = "10.0.0.0/16"
 }
 
 variable "subnet_cidrs" {
   description = "List of subnet CIDRs [Jenkins, Docker, Free]"
   type        = list(string)
-  default     = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
 }
 
 variable "instance_types" {
-  description = "Map of instance types for EC2s"
+  description = "Map of instance types for each EC2: jenkins, docker, free"
   type        = map(string)
-  default = {
-    jenkins = "t2.large"
-    docker  = "t2.large"
-    free    = "t2.micro"
-  }
 }
 
 variable "key_name" {
@@ -32,26 +19,22 @@ variable "key_name" {
 }
 
 variable "root_volume_size" {
-  description = "Root EBS volume size in GiB"
+  description = "Root EBS volume size (GiB)"
   type        = number
-  default     = 40
 }
 
 variable "allowed_ssh_cidr" {
-  description = "CIDR allowed for SSH access"
+  description = "CIDR allowed for SSH"
   type        = string
-  default     = "0.0.0.0/0"
 }
 
 variable "allowed_http_cidr" {
-  description = "CIDR allowed for HTTP/Jenkins access"
+  description = "CIDR allowed for HTTP/Jenkins"
   type        = string
-  default     = "0.0.0.0/0"
 }
 
 variable "amazon_linux_2023_ami" {
   description = "Amazon Linux 2023 AMI ID"
   type        = string
-  default     = "ami-0532be01f26a3de55"
 }
 
