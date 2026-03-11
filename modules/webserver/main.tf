@@ -90,7 +90,20 @@ resource "aws_security_group" "main_sg" {
     protocol    = "tcp"
     cidr_blocks = [var.allowed_http_cidr]
   }
-
+  ingress {
+    description = "Kubernetes API server"
+    from_port   = 6443
+    to_port     = 6443
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_ssh_cidr]
+  }
+  ingress {
+    description = "NodePort services"
+    from_port   = 30000
+    to_port     = 32767
+    protocol    = "tcp"
+    cidr_blocks = [var.allowed_http_cidr]
+  }
   egress {
     from_port   = 0
     to_port     = 0
@@ -125,11 +138,65 @@ locals {
 
     docker = <<-EOF
       #!/bin/bash
-      sudo dnf update -y
-      sudo dnf install -y docker git
+      sudo yum update -y
+      sudo yum install -y docker git
       sudo systemctl enable docker
       sudo systemctl start docker
       sudo usermod -aG docker ec2-user
+ # Disable swap
+      sudo swapoff -a
+      sudo sed -i '/ swap / s/^/#/' /etc/fstab
+
+      # Kernel modules
+      cat <<EOT | sudo tee /etc/modules-load.d/k8s.conf
+      overlay
+      br_netfilter
+      EOT
+
+      sudo modprobe overlay
+      sudo modprobe br_netfilter
+
+      cat <<EOT | sudo tee /etc/sysctl.d/k8s.conf
+      net.bridge.bridge-nf-call-iptables = 1
+      net.ipv4.ip_forward = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      EOT
+
+      sudo sysctl --system
+
+      # containerd
+      sudo dnf install -y containerd
+      sudo mkdir -p /etc/containerd
+      containerd config default | sudo tee /etc/containerd/config.toml
+      sudo systemctl restart containerd
+      sudo systemctl enable containerd
+
+      # Kubernetes repo
+      cat <<EOT | sudo tee /etc/yum.repos.d/kubernetes.repo
+      [kubernetes]
+      name=Kubernetes
+      baseurl=https://pkgs.k8s.io/core:/stable:/v1.35/rpm/
+      enabled=1
+      gpgcheck=1
+      gpgkey=https://pkgs.k8s.io/core:/stable:/v1.35/rpm/repodata/repomd.xml.key
+      EOT
+
+      sudo dnf install -y kubelet kubeadm kubectl --disableexcludes=kubernetes
+      sudo systemctl enable kubelet
+
+      PRIVATE_IP=$(hostname -I | awk '{print $1}')
+
+      sudo kubeadm init --apiserver-advertise-address=$PRIVATE_IP --pod-network-cidr=192.168.0.0/16
+
+      mkdir -p /home/ec2-user/.kube
+      sudo cp /etc/kubernetes/admin.conf /home/ec2-user/.kube/config
+      sudo chown ec2-user:ec2-user /home/ec2-user/.kube/config
+
+      export KUBECONFIG=/etc/kubernetes/admin.conf
+
+      kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.30.3/manifests/calico.yaml
+
+      kubectl taint nodes --all node-role.kubernetes.io/control-plane- || true
     EOF
 
     free = ""
